@@ -1,0 +1,9 @@
+data/inventario_medrano_catalogo_completo.json
+.DS_Store
+.vscode/
+
+# Datos locales del inventario
+data/inventario.json
+data/inventario_medrano_catalogo_completo.json
+.env
+*.log

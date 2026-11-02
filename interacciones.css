@@ -1,0 +1,47 @@
+/* Paginación de 5 registros y campos de búsqueda.
+/* Paginación numerada: cinco filas por página en cada tabla indicada. */
+.js .js-paginated-table:not(.pagination-ready) tbody tr:nth-child(n+6) { display:none; }
+.js-paginated-table tbody tr[hidden] { display:none !important; }
+.js-paginated-table tbody tr.row-fade-in { animation: medranoRowIn .22s ease both; }
+@keyframes medranoRowIn { from {opacity:.25;transform:translateY(6px)} to {opacity:1;transform:translateY(0)} }
+.table-pager { padding:17px 15px 20px; border-top:1px solid #eef2f6; text-align:center; }
+.table-pager-buttons { display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:7px; }
+.table-pager-btn { display:inline-flex;align-items:center;justify-content:center; width:37px;height:37px; border:1px solid #4a99b5;border-radius:50%;font-size:14px;font-weight:600;line-height:1;cursor:pointer;background:#fff;color:#26475b;transition:background .15s,color .15s,transform .15s; }
+.table-pager-btn:hover:not(:disabled) { background:#edf7fc;transform:translateY(-1px); }
+.table-pager-btn.is-current { background:#087bae;color:#fff;border-color:#087bae;box-shadow:0 1px 6px rgba(8,123,174,.2); }
+.table-pager-btn:disabled { border-color:#d8e0e5;color:#bdc8cf;background:#f9fafb;cursor:not-allowed; }
+.table-pager-btn:focus-visible { outline:3px solid #f5a97b;outline-offset:2px; }
+.table-pager-description { display:block;font-size:11px;color:#77899a;margin-top:10px; }
+
+
+/* Listas filtrables: mismo backend compatible[] / equivalentes[] */
+.checklist-label { display:block;margin:0 0 5px;color:#58687a;font-size:12px;font-weight:700; }
+.searchable-checklist .checklist-search { display:block;width:100%;margin:0 0 10px; }
+.choice-list {max-height:210px;overflow-y:auto;border:1px solid #dae3ec;border-radius:9px;padding:5px 11px;background:#fafcfe;scrollbar-width:thin;}
+.choice-list .check-item { display:flex;align-items:start;gap:8px;margin:0;padding:9px 1px;border-bottom:1px solid #edf0f4;cursor:pointer;font-size:12px;line-height:1.35; }
+.choice-list .check-item:last-child {border-bottom:0;}
+.choice-list .check-item input { flex:0 0 auto;margin:2px 0 0; }
+.choice-list .check-item.is-filtered {display:none;}
+.choice-list .check-item:hover {color:#087bae!important;}
+.filter-count {display:block;color:#8a9aaa;font-size:11px;margin-top:7px;}
+.selected-chips {display:flex;flex-wrap:wrap;gap:6px;margin:0 0 9px;}
+.selected-chips:empty {display:none;}
+.selected-chip {border:1px solid #c9e4f4;border-radius:20px;background:#eaf7ff;color:#236b91;font:600 11px Arial,sans-serif;padding:6px 9px;cursor:pointer;max-width:100%;overflow-wrap:anywhere;text-align:left;}
+.selected-chip:hover {background:#d2efff;}
+
+
+/* Selector de producto con búsqueda y sugerencias.*/
+.combo-product {position:relative;min-width:0;}
+.combo-product > label {font-weight:700;color:#58687a;font-size:12px;display:block;}
+.combo-custom {display:none;position:relative;}
+.combo-product.combo-enhanced .combo-custom {display:block;}
+.combo-product.combo-enhanced .combo-native {display:none;}
+.combo-custom .combo-input {width:100%;}
+.combo-hint {display:block;color:#8b9aaa;font-size:11px;margin-top:6px;}
+.combo-suggestions {position:absolute;left:0;right:0;top:calc(100% - 23px);z-index:20;background:#fff;border:1px solid #cfdfe9;border-radius:9px;box-shadow:0 12px 26px rgba(21,44,73,.16);max-height:255px;overflow-y:auto;padding:5px;}
+.combo-suggestions[hidden] {display:none;}
+.combo-option {border:0;background:#fff;color:#243c51;cursor:pointer;display:block;padding:10px 11px;width:100%;font:inherit;font-size:12px;text-align:left;border-radius:6px;}
+.combo-option:hover,.combo-option.is-highlighted {background:#eaf5fc;color:#0b608b;}
+.combo-no-results {padding:13px;color:#91a1af;font-size:12px;}
+@media(max-width:500px){.table-pager-buttons{gap:5px}.table-pager-btn{width:33px;height:33px;font-size:12px}.check-sections{min-width:0}}
+@media(prefers-reduced-motion:reduce){.js-paginated-table tbody tr.row-fade-in{animation:none}.table-pager-btn{transition:none}}
