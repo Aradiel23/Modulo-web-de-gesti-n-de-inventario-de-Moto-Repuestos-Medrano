@@ -1,10 +1,21 @@
 <?php
 declare(strict_types=1);
 
+// Modelos de dominio y repositorio.
+require_once __DIR__ . '/Models/Producto.php';
+require_once __DIR__ . '/Models/Motocicleta.php';
+require_once __DIR__ . '/Models/Movimiento.php';
+require_once __DIR__ . '/Repositories/InventarioRepository.php';
+
+use MotoMedrano\Models\Producto;
+use MotoMedrano\Models\Motocicleta;
+use MotoMedrano\Models\Movimiento;
+use MotoMedrano\Repositories\InventarioRepository;
+
 date_default_timezone_set('America/La_Paz');
 
 function database_file(): string {
-    // Fuente única de almacenamiento local. No se utilizan catálogos JSON secundarios.
+    // Fuente única de almacenamiento local.
     $override = getenv('MRM_DATA_FILE'); // Solo para pruebas locales automatizadas.
     if ($override !== false && $override !== '') return $override;
     return dirname(__DIR__) . '/data/inventario.json';
@@ -6708,12 +6719,6 @@ MEDRANO_CATALOGO_JSON;
     return preparar_catalogo_demostracion($data);
 }
 
-/**
- * Asocia exclusivamente referencias textuales explícitas del nombre del repuesto
- * con modelos del catálogo de motocicletas. NO verifica compatibilidad mecánica.
- * Para que no haya falsos positivos, no se asignan nombres genéricos como
- * "UNIVERSAL", "FAN", "MOTO CHINA" ni cilindradas sin modelo.
- */
 function referencias_motos_en_nombre(string $nombre, array $vehiculos): array {
     $texto = preg_replace('/[^A-Z0-9]+/', ' ', strtoupper($nombre)) ?? '';
     // Variantes de nombres encontrados en el catálogo impreso.
@@ -6753,14 +6758,12 @@ function referencias_motos_en_nombre(string $nombre, array $vehiculos): array {
     return $encontrados;
 }
 
-/** Ubicaciones simuladas repartidas de A a Z y de estante 01 a 40. */
 function ubicacion_demo_para_indice(int $indice): string {
     $deposito = chr(ord('A') + ($indice % 26));
     $estante = (($indice * 7) % 40) + 1;
     return 'Depósito ' . $deposito . ' - Estante ' . str_pad((string)$estante, 2, '0', STR_PAD_LEFT);
 }
 
-/** Prepara únicamente el catálogo inicial para una demostración académica. */
 function preparar_catalogo_demostracion(array $catalogo): array {
     foreach ($catalogo['productos'] as $i => &$producto) {
         $producto['ubicacion'] = ubicacion_demo_para_indice($i);
@@ -6783,6 +6786,12 @@ function preparar_catalogo_demostracion(array $catalogo): array {
     return $catalogo;
 }
 
+/**
+ * Crea data/inventario.json al primer uso si no existe.
+ * Si ya existía, añade modelos nuevos y los productos que falten.
+ * Los stocks de demostración se aplican SOLO a productos importados sin
+ * movimientos y con stock=0 no confirmado; no sobrescribe conteos reales.
+ */
 function init_database(): void {
     static $comprobados = [];
     $path = database_file();
@@ -6795,12 +6804,11 @@ function init_database(): void {
     $catalogo = demo_seed();
     $marca = 'MEDRANO-MOTOS-UBICACIONES-2026-10-31-v3';
 
-    //se genera automáticamente con datos
+    // Si borraste inventario.json, se genera automáticamente con datos.
     $nuevo = @fopen($path, 'x');
     if ($nuevo !== false) {
         try {
-            if (!flock($nuevo, LOCK_EX)) throw new RuntimeE
-            xception('No se pudo bloquear el inventario nuevo.');
+            if (!flock($nuevo, LOCK_EX)) throw new RuntimeException('No se pudo bloquear el inventario nuevo.');
             $texto = json_encode($catalogo, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
             if (fwrite($nuevo, $texto) !== strlen($texto)) throw new RuntimeException('No se pudo guardar el inventario inicial.');
             fflush($nuevo);
@@ -6843,7 +6851,7 @@ function init_database(): void {
             } else {
                 $idx = $codigos[$sku];
                 $existing = &$actual['productos'][$idx];
-                
+               
                 if (($existing['origen'] ?? '') === 'CATALOGO MEDRANO 17-08-2026'
                     && !($existing['stock_confirmado'] ?? false)
                     && !isset($modificados[$sku])
@@ -6862,7 +6870,6 @@ function init_database(): void {
                     $existing['ubicacion_demo'] = true;
                 }
                 
-
                 if (($existing['origen'] ?? '') === 'CATALOGO MEDRANO 17-08-2026'
                     && empty($existing['compatibles']) && !empty($p['compatibles'])) {
                     $existing['compatibles'] = $p['compatibles'];
@@ -6895,7 +6902,7 @@ function init_database(): void {
         if (!isset($actual['catalogo_fuente'])) $actual['catalogo_fuente'] = $catalogo['catalogo_fuente'];
         $actual['meta_vehiculos'] = $catalogo['meta_vehiculos'];
         $actual['_catalogo_inicial_instalado'] = $marca;
-        // Si el archivo ya tenía registros reales, no etiquetar todo el inventario
+        
         if (!isset($actual['datos_simulados'])) $actual['datos_simulados'] = true;
         $actual['descripcion_demo'] = $catalogo['descripcion_demo'];
         $actual['meta_simulacion'] = $catalogo['meta_simulacion'];
@@ -6908,39 +6915,25 @@ function init_database(): void {
     } finally { flock($fp, LOCK_UN); fclose($fp); }
 }
 
+
 function read_database(): array {
     init_database();
-    $fp = fopen(database_file(), 'r');
-    if (!$fp) throw new RuntimeException('No se pudo abrir el almacén de datos.');
-    try {
-        if (!flock($fp, LOCK_SH)) throw new RuntimeException('No se pudo bloquear para lectura.');
-        $content = stream_get_contents($fp);
-        $result = json_decode($content ?: '', true, 512, JSON_THROW_ON_ERROR);
-        if (!is_array($result)) throw new RuntimeException('Datos no válidos.');
-        return $result;
-    } finally { flock($fp, LOCK_UN); fclose($fp); }
+    return (new InventarioRepository(database_file()))->leer();
 }
 function update_database(callable $change): void {
     init_database();
-    $fp = fopen(database_file(), 'c+');
-    if (!$fp) throw new RuntimeException('No se pudo abrir el almacén para escritura.');
-    try {
-        if (!flock($fp, LOCK_EX)) throw new RuntimeException('No se pudo bloquear para escritura.');
-        rewind($fp);
-        $data = json_decode(stream_get_contents($fp) ?: '', true, 512, JSON_THROW_ON_ERROR);
-        $change($data);
-        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        rewind($fp);
-        if (!ftruncate($fp, 0) || fwrite($fp, $json) === false) throw new RuntimeException('No se pudieron guardar los cambios.');
-        fflush($fp);
-    } finally { flock($fp, LOCK_UN); fclose($fp); }
+    (new InventarioRepository(database_file()))->modificar($change);
 }
 function find_product(array $productos, string $sku): ?array {
-    foreach ($productos as $product) if ($product['sku'] === $sku) return $product;
+    foreach ($productos as $registro) {
+        if (($registro['sku'] ?? '') === $sku) return Producto::desdeArray($registro)->aArray();
+    }
     return null;
 }
 function find_vehicle(array $vehiculos, string $id): ?array {
-    foreach ($vehiculos as $vehicle) if ($vehicle['id'] === $id) return $vehicle;
+    foreach ($vehiculos as $registro) {
+        if (($registro['id'] ?? '') === $id) return Motocicleta::desdeArray($registro)->aArray();
+    }
     return null;
 }
 // Valida SKU y campos antes de crear o actualizar un repuesto.
@@ -6987,6 +6980,8 @@ function save_product(array $input): void {
         }
         // Un precio editado por el usuario deja de figurar como pendiente.
         $p['precio_pendiente'] = false;
+        // El modelo valida la entidad antes de almacenarla.
+        $p = Producto::desdeArray($p)->aArray();
         if ($existing) {
             foreach ($db['productos'] as &$row) if ($row['sku'] === $sku) { $row = $p; break; }
             unset($row);
@@ -6997,7 +6992,10 @@ function save_product(array $input): void {
 function toggle_product(string $sku): void {
     update_database(function (&$db) use ($sku) {
         foreach ($db['productos'] as &$product) {
-            if ($product['sku'] === $sku) { $product['activo'] = !$product['activo']; return; }
+            if ($product['sku'] === $sku) {
+                $product = Producto::desdeArray($product)->alternarActivo()->aArray();
+                return;
+            }
         }
         throw new DomainException('Producto no encontrado.');
     });
@@ -7016,17 +7014,13 @@ function save_movement(array $input): array {
     update_database(function (&$db) use ($sku,$type,$qtyString,$reason,&$result) {
         foreach ($db['productos'] as &$product) {
             if ($product['sku'] !== $sku) continue;
-            if (!$product['activo']) throw new DomainException('No se pueden mover productos inactivos.');
-            $before = $product['stock'];
-            $qty = (int)$qtyString;
-            if ($type === 'salida' && $before < $qty) throw new DomainException('Stock insuficiente. Disponibles: ' . $before . ' unidades.');
-            $after = $type === 'entrada' ? $before + $qty : $before - $qty;
-            $product['stock'] = $after;
-            $movement = [
-                'id'=>bin2hex(random_bytes(6)), 'fecha'=>date('Y-m-d H:i:s'), 'sku'=>$sku,
-                'producto'=>$product['nombre'], 'tipo'=>$type,'cantidad'=>$qty,'motivo'=>$reason,
-                'antes'=>$before, 'despues'=>$after
-            ];
+            $modeloAnterior = Producto::desdeArray($product);
+            $modeloNuevo = $modeloAnterior->aplicarMovimiento($type, (int)$qtyString);
+            $product = $modeloNuevo->aArray();
+            // El modelo Movimiento documenta y valida la transición de existencias.
+            $movement = Movimiento::registrar(
+                $modeloAnterior, $modeloNuevo, $type, (int)$qtyString, $reason
+            )->aArray();
             array_unshift($db['movimientos'], $movement);
             $result = $movement;
             return;
